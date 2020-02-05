@@ -1,7 +1,21 @@
-from mcmd import history, io
-from mcmd.client import auth
+from enum import Enum
+
 from mcmd.config import config
-from mcmd.utils.errors import McmdError
+from mcmd.core import history
+from mcmd.core.errors import McmdError
+from mcmd.io import io
+from mcmd.molgenis import auth
+
+
+class CommandType(Enum):
+    # Commands that communicate with a running MOLGENIS over HTTP
+    STANDARD = 'standard'
+
+    # Commands that communicate with the database, filestore, etc. of a locally installed MOLGENIS
+    LOCAL = 'local'
+
+    # Other commands like configuring MCMD, running scripts, seeing the history, etc.
+    META = 'meta'
 
 
 def command(func):

@@ -1,5 +1,6 @@
+from unittest.mock import patch
+
 import pytest
-from mock import patch
 
 from tests.integration.loader_mock import get_host
 from tests.integration.utils import run_commander, random_name, entity_type_exists
@@ -16,7 +17,7 @@ def test_login_password(set_token, session):
 
 
 @pytest.mark.integration
-@patch('mcmd.io.password')
+@patch('mcmd.io.ask.password')
 @patch('mcmd.config.config._get_selected_host_auth')
 @patch('mcmd.config.config.set_token')
 def test_login_no_password(set_token_mock, host_mock, enter_password, session):

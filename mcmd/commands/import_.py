@@ -6,14 +6,16 @@ import polling
 import requests
 
 import mcmd.config.config as config
-from mcmd import io
-from mcmd.client import github_client as github
-from mcmd.client.molgenis_client import post_file, get, import_by_url
-from mcmd.command import command
+import mcmd.io.ask
 from mcmd.commands._registry import arguments
-from mcmd.config.home import get_issues_folder
-from mcmd.io import highlight
-from mcmd.utils.errors import McmdError
+from mcmd.core.command import command
+from mcmd.core.errors import McmdError
+from mcmd.core.home import get_issues_folder
+from mcmd.github import client as github
+from mcmd.io import io
+from mcmd.io.io import highlight
+from mcmd.molgenis import api
+from mcmd.molgenis.client import post_file, get, post
 from mcmd.utils.file_helpers import scan_folders_for_files, select_path
 
 # =========
@@ -28,35 +30,35 @@ _p_import = None
 def add_arguments(subparsers):
     global _p_import
     _p_import = subparsers.add_parser('import',
-                                      help='Import a file')
+                                      help='import a dataset')
     _p_import.set_defaults(func=import_,
                            write_to_history=True)
     _p_import.add_argument('resource',
                            nargs='?',
-                           help='The resource to import. Depending on the other options this can be a path, file name, '
-                                'or URL.')
+                           help='the resource to import - depending on the other options this can be a path, '
+                                'file name, or URL')
     p_import_source = _p_import.add_mutually_exclusive_group()
     p_import_source.add_argument('--from-path', '-p',
                                  action='store_true',
-                                 help='Import a file the old school way: by path.')
+                                 help='import a file the old school way: by path')
     p_import_source.add_argument('--from-issue', '-i',
                                  metavar='NUMBER',
-                                 help="Import a file attachment from a GitHub issue. It's possible (but not required) "
-                                      "to specify the file name of the attachment.")
+                                 help="import a file attachment from a GitHub issue - optionally supply the file name "
+                                      "of the attachment")
     p_import_source.add_argument('--from-url', '-u',
                                  action='store_true',
-                                 help='Import a file from a URL. Uses the importByUrl endpoint of the MOLGENIS '
-                                      'importer, without downloading the file first.')
+                                 help='import a file from a URL - uses the importByUrl endpoint of the MOLGENIS '
+                                      'importer, without downloading the file first')
     _p_import.add_argument('--in',
                            dest='to_package',
                            type=str,
                            metavar='PACKAGE_ID',
-                           help='The package to import to.')
+                           help='the package to import to')
     _p_import.add_argument('--as',
                            dest='entity_type_id',
                            type=str,
                            metavar='ENTITY_TYPE_ID',
-                           help='The id of the entity type (only used when importing VCF files)')
+                           help='the id of the entity type (only used when importing VCF files)')
     return _p_import
 
 
@@ -110,7 +112,7 @@ def _import_from_url(args):
 
     params['url'] = file_url
 
-    response = import_by_url(params)
+    response = post(api.import_by_url(), params=params)
     import_run_url = urljoin(config.get('host', 'selected'), response.text)
     status, message = _poll_for_completion(import_run_url)
     if status == 'FAILED':
@@ -181,7 +183,7 @@ def _choose_attachment(attachments):
     attachment_map = _create_attachment_map(attachments)
     choices = list(attachment_map.keys())
 
-    answer = io.multi_choice('Multiple attachments found. Choose which one to import:', choices)
+    answer = mcmd.io.ask.multi_choice('Multiple attachments found. Choose which one to import:', choices)
     return attachment_map[answer]
 
 
@@ -191,7 +193,7 @@ def _download_attachment(attachment, issue_num):
     file_path = issue_folder.joinpath(attachment.name)
 
     if file_path.exists():
-        overwrite = io.confirm('File %s already exists. Re-download?' % file_path.name)
+        overwrite = mcmd.io.ask.confirm('File %s already exists. Re-download?' % file_path.name)
         if not overwrite:
             return file_path
 
@@ -218,7 +220,7 @@ def _do_import(file_path, package, entity_type_id):
     if entity_type_id:
         params['entityTypeId'] = entity_type_id
 
-    response = post_file(config.api('import'), file_path.resolve(), params)
+    response = post_file(api.import_(), file_path.resolve(), params)
     import_run_url = urljoin(config.get('host', 'selected'), response.text)
     status, message = _poll_for_completion(import_run_url)
     if status == 'FAILED':
@@ -235,8 +237,14 @@ def _get_import_action(file_name):
 
 
 def _poll_for_completion(url):
+    def step_function(step):
+        """Increases time between polls with one second each time, with a maximum of 10 seconds."""
+        step += 1
+        return min(step, 10)
+
     polling.poll(lambda: get(url).json()['status'] != 'RUNNING',
-                 step=0.1,
+                 step=0,
+                 step_function=step_function,
                  poll_forever=True)
     import_run = get(url).json()
     return import_run['status'], import_run['message']

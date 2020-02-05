@@ -3,12 +3,14 @@ from os import path as os_path
 from pathlib import Path
 
 import mcmd.config.config as config
-from mcmd import io
-from mcmd.client.molgenis_client import post, get, post_files
-from mcmd.command import command
 from mcmd.commands._registry import arguments
-from mcmd.io import highlight
-from mcmd.utils.errors import McmdError
+from mcmd.core.command import command
+from mcmd.core.compatibility import version
+from mcmd.core.errors import McmdError
+from mcmd.io import io
+from mcmd.io.io import highlight
+from mcmd.molgenis import api
+from mcmd.molgenis.client import post, get, post_files
 from mcmd.utils.file_helpers import get_file_name_from_path, scan_folders_for_files, select_path
 
 # Store a reference to the parser so that we can show an error message for the custom validation rule
@@ -23,98 +25,98 @@ p_add_theme = None
 def add_arguments(subparsers):
     global p_add_theme
     p_add = subparsers.add_parser('add',
-                                  help='Add users, groups, tokens, themes and logos',
+                                  help='add and upload resources',
                                   description="Run 'mcmd add group -h' or 'mcmd add user -h' to view the help for those"
-                                              " sub-commands")
-    p_add_subparsers = p_add.add_subparsers(dest="type")
+                                              " subcommands")
+    p_add_subparsers = p_add.add_subparsers(dest="type", metavar='')
 
     p_add_group = p_add_subparsers.add_parser('group',
-                                              help='Add a group')
+                                              help='add a group')
     p_add_group.set_defaults(func=add_group,
                              write_to_history=True)
     p_add_group.add_argument('name',
                              type=str,
-                             help="The group's name")
+                             help="the group's name")
 
     p_add_user = p_add_subparsers.add_parser('user',
-                                             help='Add a user')
+                                             help='add a user')
     p_add_user.set_defaults(func=add_user,
                             write_to_history=True)
     p_add_user.add_argument('username',
                             type=str,
-                            help="The user's name")
+                            help="the user's name")
     p_add_user.add_argument('--set-password', '-p',
                             metavar='PASSWORD',
                             type=str,
-                            help="The user's password")
+                            help="the user's password")
     p_add_user.add_argument('--with-email', '-e',
                             metavar='EMAIL',
                             type=str,
-                            help="The user's e-mail address")
+                            help="the user's e-mail address")
     p_add_user.add_argument('--is-inactive', '-a',
                             action='store_true',
-                            help="Make user inactive")
+                            help="make user inactive")
     p_add_user.add_argument('--is-superuser', '-s',
                             action='store_true',
-                            help="Make user superuser")
+                            help="make user superuser")
     p_add_user.add_argument('--change-password', '-c',
                             action='store_true',
-                            help="Set change password to true for user")
+                            help="set change password to true for user")
 
     p_add_package = p_add_subparsers.add_parser('package',
-                                                help='Add a package')
+                                                help='add a package')
     p_add_package.set_defaults(func=add_package,
                                write_to_history=True)
     p_add_package.add_argument('id',
                                type=str,
-                               help="The id of the Package")
+                               help="the id of the Package")
     p_add_package.add_argument('--in',
                                type=str,
                                dest='parent',
-                               help="The id of the parent")
+                               help="the id of the parent")
 
     p_add_token = p_add_subparsers.add_parser('token',
-                                              help='Add a token')
+                                              help='add a token')
     p_add_token.set_defaults(func=add_token,
                              write_to_history=True)
     p_add_token.add_argument('user',
                              type=str,
-                             help="The user to give the token to")
+                             help="the user to give the token to")
     p_add_token.add_argument('token',
                              type=str,
-                             help="The token")
+                             help="the token")
 
     p_add_theme = p_add_subparsers.add_parser('theme',
-                                              help='Upload a bootstrap theme')
+                                              help='upload a bootstrap theme')
     p_add_theme.set_defaults(func=add_theme,
                              write_to_history=True)
     p_add_theme.add_argument('--from-path', '-p',
                              action='store_true',
-                             help='Add a bootstrap theme by specifying a path')
+                             help='add a bootstrap theme by specifying a path')
 
     required_named = p_add_theme.add_argument_group('required named arguments')
     required_named.add_argument('--bootstrap3', '-3',
                                 type=str,
                                 metavar='STYLESHEET',
-                                help="The bootstrap3 css theme file (when not specified, the default molgenis theme "
+                                help="the bootstrap3 css theme file (when not specified, the default molgenis theme "
                                      "will be applied on bootstrap3 pages)")
 
     p_add_theme.add_argument('--bootstrap4', '-4',
                              type=str,
                              metavar='STYLESHEET',
-                             help="The bootstrap4 css theme file (when not specified, the default molgenis theme will "
+                             help="the bootstrap4 css theme file (when not specified, the default molgenis theme will "
                                   "be applied on bootstrap4 pages)")
 
     p_add_logo = p_add_subparsers.add_parser('logo',
-                                             help='Upload a logo to be placed on the left top of the menu')
+                                             help='upload a logo to be placed on the left top of the menu')
     p_add_logo.set_defaults(func=add_logo,
                             write_to_history=True)
     p_add_logo.add_argument('--from-path', '-p',
                             action='store_true',
-                            help='Add a logo by specifying a path')
+                            help='add a logo by specifying a path')
     p_add_logo.add_argument('logo',
                             type=str,
-                            help="The image you want to use as logo")
+                            help="the image you want to use as logo")
 
 
 # =======
@@ -131,20 +133,32 @@ def add_user(args):
     superuser = args.is_superuser
     ch_pwd = args.change_password
 
-    post(config.api('rest1') + 'sys_sec_User',
-         {'username': args.username,
-          'password_': password,
-          'changePassword': ch_pwd,
-          'Email': email,
-          'active': active,
-          'superuser': superuser
-          })
+    post(api.rest1('sys_sec_User'),
+         data={'username': args.username,
+               'password_': password,
+               'changePassword': ch_pwd,
+               'Email': email,
+               'active': active,
+               'superuser': superuser
+               })
 
 
 @command
 def add_group(args):
     io.start('Adding group %s' % highlight(args.name))
-    post(config.api('group'), {'name': args.name.lower(), 'label': args.name})
+    post(api.group(), data={'name': _to_group_name(args.name), 'label': args.name})
+
+
+@version('7.0.0')
+def _to_group_name(group_input: str):
+    """Before 8.3.0 all group names are lower case."""
+    return group_input.lower()
+
+
+@version('8.3.0')
+def _to_group_name(group_input: str):
+    """Since 8.3.0 group names are case sensitive."""
+    return group_input
 
 
 @command
@@ -157,14 +171,18 @@ def add_package(args):
     if args.parent:
         data['parent'] = args.parent
 
-    post(config.api('rest1') + 'sys_md_Package', data)
+    post(api.rest1('sys_md_Package'), data=data)
 
 
 @command
 def add_token(args):
     io.start('Adding token %s for user %s' % (highlight(args.token), highlight(args.user)))
 
-    user = get(config.api('rest2') + 'sys_sec_User?attrs=id&q=username==%s' % args.user)
+    user = get(api.rest2('sys_sec_User'),
+               params={
+                   'attrs': 'id',
+                   'q': 'username=={}'.format(args.user)
+               })
     if user.json()['total'] == 0:
         raise McmdError('Unknown user %s' % args.user)
 
@@ -173,7 +191,7 @@ def add_token(args):
     data = {'User': user_id,
             'token': args.token}
 
-    post(config.api('rest1') + 'sys_sec_Token', data)
+    post(api.rest1('sys_sec_Token'), data=data)
 
 
 @command
@@ -185,7 +203,7 @@ def add_theme(args):
     """
     _validate_args(args)
     valid_types = {'text/css'}
-    api = config.api('add_theme')
+    api_ = api.add_theme()
     bs3_name = args.bootstrap3
     bs4 = args.bootstrap4
     paths = [bs3_name]
@@ -205,7 +223,7 @@ def add_theme(args):
     if not args.from_path:
         paths = [_get_path_from_quick_folders(theme) for theme in paths]
     files = _prepare_files_for_upload(paths, names, valid_types)
-    post_files(files, api)
+    post_files(files, api_)
 
 
 @command
@@ -215,7 +233,7 @@ def add_logo(args):
     :param args: commandline arguments containing path to logo
     :return: None
     """
-    api = config.api('logo')
+    api_ = api.logo()
     valid_types = {'image/jpeg', 'image/png', 'image/gif'}
     logo = [args.logo]
     if not args.from_path:
@@ -224,7 +242,7 @@ def add_logo(args):
     else:
         io.start('Adding logo {}'.format(highlight(args.logo)))
     files = _prepare_files_for_upload(logo, ['logo'], valid_types)
-    post_files(files, api)
+    post_files(files, api_)
 
 
 def _prepare_files_for_upload(paths, names, valid_content_types):

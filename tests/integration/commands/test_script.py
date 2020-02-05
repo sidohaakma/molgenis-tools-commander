@@ -1,9 +1,10 @@
 import os
+from unittest import mock
+from unittest.mock import patch, mock_open
 
 import pytest
-from mock import patch, mock, mock_open
 
-from mcmd.config.home import get_scripts_folder
+from mcmd.core.home import get_scripts_folder
 from tests.integration.utils import run_commander
 
 _expected_list_messages = [file for file in os.listdir(get_scripts_folder())]
@@ -29,9 +30,9 @@ def test_script_read(caplog):
 
 
 @pytest.mark.integration
-@patch('mcmd.io.input_')
-@patch('mcmd.io.checkbox')
-@patch('mcmd.history.read')
+@patch('mcmd.io.ask.input_')
+@patch('mcmd.io.ask.checkbox')
+@patch('mcmd.core.history.read')
 def test_script_create(history, which_lines, what_filename):
     history.return_value = _history_lines
     which_lines.return_value = ['add user henk', 'add group test']

@@ -8,9 +8,11 @@ import json
 import requests
 from requests import HTTPError
 
-from mcmd import io
+import mcmd.io.ask
 from mcmd.config import config
-from mcmd.utils.errors import McmdError
+from mcmd.core.errors import McmdError, MolgenisOfflineError
+from mcmd.io import io
+from mcmd.molgenis import api
 
 _username = None
 _password = None
@@ -24,17 +26,34 @@ def get_token():
     return _token
 
 
-def invalidate_token():
-    global _token
-    _token = None
-
-
 def set_(username, password=None, token=None, as_user=False):
     global _username, _password, _token, _as_user
     _username = username
     _password = password
     _token = token
     _as_user = as_user
+
+
+def check_token():
+    """Queries the Token table to see if the set token is valid. The Token table is an arbitrary choice but will work
+    because it should always be accessible to the superuser exclusively."""
+    if _as_user:
+        return
+
+    try:
+        response = requests.get(api.rest2('sys_sec_Token'),
+                                params={
+                                    'q': 'token=={}'.format(_token)
+                                },
+                                headers={'Content-Type': 'application/json', 'x-molgenis-token': _token})
+        response.raise_for_status()
+    except HTTPError as e:
+        if e.response.status_code == 401:
+            _login()
+        else:
+            raise McmdError(str(e))
+    except requests.exceptions.ConnectionError:
+        raise MolgenisOfflineError()
 
 
 def _login():
@@ -46,7 +65,7 @@ def _login():
 
     try:
         io.debug('Logging in as user {}'.format(_username))
-        response = requests.post(config.api('login'),
+        response = requests.post(api.login(),
                                  headers={'Content-Type': 'application/json'},
                                  data=json.dumps({"username": _username, "password": _password}))
         response.raise_for_status()
@@ -62,5 +81,7 @@ def _login():
 
 
 def _ask_password():
-    return io.password(
-        'Please enter the password for user {} on {}'.format(_username, config.url()))
+    io.pause()
+    password = mcmd.io.ask.password('Please enter the password for user {} on {}'.format(_username, config.url()))
+    io.unpause()
+    return password

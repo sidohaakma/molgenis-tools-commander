@@ -1,10 +1,10 @@
 from enum import Enum
 
-from mcmd.client.molgenis_client import get
-from mcmd.config import config
-from mcmd.io import multi_choice
-from mcmd.logging import get_logger
-from mcmd.utils.errors import McmdError
+from mcmd.molgenis import api
+from mcmd.molgenis.client import get
+from mcmd.io.ask import multi_choice
+from mcmd.io.logging import get_logger
+from mcmd.core.errors import McmdError
 
 log = get_logger()
 
@@ -30,13 +30,20 @@ def principal_exists(principal_name, principal_type):
 
 def user_exists(username):
     log.debug('Checking if user %s exists' % username)
-    response = get(config.api('rest2') + 'sys_sec_User?q=username==' + username)
+    response = get(api.rest2('sys_sec_User'),
+                   params={
+                       'q': 'username==' + username
+                   })
+
     return int(response.json()['total']) > 0
 
 
 def role_exists(rolename):
     log.debug('Checking if role %s exists' % rolename)
-    response = get(config.api('rest2') + 'sys_sec_Role?q=name==' + rolename.upper())
+    response = get(api.rest2('sys_sec_Role'),
+                   params={
+                       'q': 'name==' + rolename.upper()
+                   })
     return int(response.json()['total']) > 0
 
 

@@ -1,12 +1,23 @@
-import logging
-import signal
 import sys
 
-from mcmd import io
-from mcmd.argparser import parse_args
+MIN_PYTHON = (3, 6)
+if sys.version_info < MIN_PYTHON:
+    import platform
+
+    sys.exit(
+        "Python {}.{} or later is required. You are running Python {}. Please upgrade to a newer version.\n".format(
+            MIN_PYTHON[0],
+            MIN_PYTHON[1],
+            platform.python_version()))
+
+import logging
+import signal
+
+from mcmd.args.parser import parse_args
 from mcmd.config.loader import load_config
-from mcmd.io import set_debug
-from mcmd.logging import set_level
+from mcmd.io import io
+from mcmd.io.io import set_debug
+from mcmd.io.logging import set_level
 
 
 def main():

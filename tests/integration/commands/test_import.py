@@ -1,7 +1,8 @@
-import pytest
-from mock import patch
+from unittest.mock import patch
 
-from mcmd.config.home import get_issues_folder
+import pytest
+
+from mcmd.core.home import get_issues_folder
 from tests.integration.loader_mock import get_dataset_folder
 from tests.integration.utils import run_commander, run_commander_fail, random_name
 
@@ -83,7 +84,7 @@ def test_import_in_package(session, package):
 
 @pytest.mark.integration
 def test_import_from_path_in_package(session, package):
-    file = get_dataset_folder().joinpath('testautoId_unpackaged.xlsx')
+    file = get_dataset_folder().joinpath('testAutoId_unpackaged.xlsx')
     run_commander('import --from-path {} --in {}'.format(file, package))
 
     result = session.get('{}_testAutoId'.format(package))
@@ -91,7 +92,7 @@ def test_import_from_path_in_package(session, package):
 
 
 @pytest.mark.integration
-@patch('mcmd.io.multi_choice')
+@patch('mcmd.io.ask.multi_choice')
 def test_import_from_issue(which_file_question, session):
     file_name = 'emx_package-only.xlsx'
     which_file_question.return_value = file_name

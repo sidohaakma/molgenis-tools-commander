@@ -1,45 +1,47 @@
-from mcmd import history, io
+import mcmd.io.ask
 from mcmd.commands._registry import arguments
-from mcmd.command import command
-from mcmd.config.home import get_scripts_folder
-from mcmd.command import command
-from mcmd.io import confirm, highlight
-from mcmd.logging import get_logger
-from mcmd.utils.errors import McmdError
+from mcmd.core import history
+from mcmd.core.command import command, CommandType
+from mcmd.core.errors import McmdError
+from mcmd.core.home import get_scripts_folder
+from mcmd.io import io
+from mcmd.io.io import highlight
+from mcmd.io.ask import confirm
+from mcmd.io.logging import get_logger
 
 
 # =========
 # Arguments
 # =========
 
-@arguments('script')
+@arguments('script', CommandType.META)
 def add_arguments(subparsers):
     p_script = subparsers.add_parser('script',
-                                     help="Do actions involving scripts.")
+                                     help="do actions involving scripts")
     p_script.set_defaults(func=script,
                           write_to_history=False)
     p_script_action = p_script.add_mutually_exclusive_group()
     p_script_action.add_argument('--create',
                                  action='store_true',
-                                 help='Create a script from the history. (This is the default action.)')
+                                 help='create a script from the history (this is the default action)')
     p_script_action.add_argument('--list', '-l',
                                  action='store_true',
-                                 help='List the stored scripts.')
+                                 help='list the stored scripts')
     p_script_action.add_argument('--delete', '-D',
                                  metavar='SCRIPT NAME',
                                  type=str,
-                                 help='Remove a script.')
+                                 help='remove a script')
     p_script_action.add_argument('--read', '-r',
                                  metavar='SCRIPT NAME',
                                  type=str,
-                                 help='Read the contents of a script.')
+                                 help='read the contents of a script')
     p_script.add_argument('--number', '-n',
                           type=int,
                           default=10,
-                          help='Number of lines of history to choose from. Default: 10')
+                          help='number of lines of history to choose from (default: 10)')
     p_script.add_argument('--show-fails', '-f',
                           action='store_true',
-                          help='Also show the failed commands from history. Disabled by default.')
+                          help='also show the failed commands from history (disabled by default)')
 
 
 # =======
@@ -99,12 +101,12 @@ def _create_script(args):
         return
 
     options = [line[1] for line in lines]
-    commands = io.checkbox('Pick the lines that will form the script:', options)
+    commands = mcmd.io.ask.checkbox('Pick the lines that will form the script:', options)
     file_name = _input_script_name()
     try:
         with open(get_scripts_folder().joinpath(file_name), 'w') as script_file:
-            for command in commands:
-                script_file.write(command + '\n')
+            for cmd in commands:
+                script_file.write(cmd + '\n')
     except OSError as e:
         raise McmdError("Error writing to script: %s" % str(e))
 
@@ -117,7 +119,7 @@ def _check_script_exists(path):
 def _input_script_name():
     file_name = ''
     while not file_name:
-        name = io.input_('Supply the name of the script:')
+        name = mcmd.io.ask.input_('Supply the name of the script:')
         if get_scripts_folder().joinpath(name).exists():
             overwrite = confirm('%s already exists. Overwrite?' % name)
             if overwrite:

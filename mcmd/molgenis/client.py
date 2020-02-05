@@ -1,24 +1,27 @@
 import json
-from urllib.parse import urljoin
 
 import requests
 
-from mcmd.client import auth
-from mcmd.client.request_handler import request
-from mcmd.config import config
+from mcmd.molgenis import auth
+from mcmd.molgenis.request_handler import request
 
 
 @request
-def get(url):
+def get(url, params=None):
     return requests.get(url,
+                        params=params,
                         headers=_get_default_headers())
 
 
 @request
-def post(url, data):
-    return requests.post(url,
-                         headers=_get_default_headers(),
-                         data=json.dumps(data))
+def post(url, data=None, params=None):
+    kwargs = {'headers': _get_default_headers()}
+    if data:
+        kwargs['data'] = json.dumps(data)
+    if params:
+        kwargs['params'] = params
+
+    return requests.post(url, **kwargs)
 
 
 @request
@@ -63,19 +66,6 @@ def put(url, data):
     return requests.put(url=url,
                         headers=_get_default_headers(),
                         data=data)
-
-
-@request
-def import_by_url(params):
-    return requests.post(config.api('import_url'),
-                         headers=_get_default_headers(),
-                         params=params)
-
-
-@request
-def get_version():
-    return requests.get(urljoin(config.api('rest2'), 'version'),
-                        headers={'Content-Type': 'application/json'})
 
 
 def _get_default_headers():
