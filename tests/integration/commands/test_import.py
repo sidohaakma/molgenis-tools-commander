@@ -2,9 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from mcmd.core.home import get_issues_folder
 from tests.integration.loader_mock import get_dataset_folder
-from tests.integration.utils import run_commander, run_commander_fail, random_name
+from tests.integration.utils import run_commander, run_commander_fail, random_name, get_test_context
 
 
 def _ontologies_by_name_query(name):
@@ -34,7 +33,8 @@ def test_import_ontology(session):
     assert len(result) == 1
 
     # cleanup
-    session.delete('sys_ont_Ontology', result[0]['id'])
+    # TODO re-enable when molgenis #7862 is fixed (https://github.com/molgenis/molgenis/issues/7862)
+    # session.delete('sys_ont_Ontology', result[0]['id'])
 
 
 @pytest.mark.integration
@@ -102,7 +102,7 @@ def test_import_from_issue(which_file_question, session):
     session.get_by_id('sys_md_Package', 'test')
 
     # cleanup
-    get_issues_folder().joinpath(str(issue_num)).joinpath(file_name).unlink()
+    get_test_context().get_issues_folder().joinpath(str(issue_num)).joinpath(file_name).unlink()
     session.delete('sys_md_Package', 'test')
 
 
@@ -115,7 +115,7 @@ def test_import_from_issue_named(session):
     session.get_by_id('sys_md_Package', 'test')
 
     # cleanup
-    get_issues_folder().joinpath(str(issue_num)).joinpath(file_name).unlink()
+    get_test_context().get_issues_folder().joinpath(str(issue_num)).joinpath(file_name).unlink()
     session.delete('sys_md_Package', 'test')
 
 
